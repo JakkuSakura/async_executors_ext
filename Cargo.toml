@@ -1,0 +1,9 @@
+[package]
+name = "async_executors_ext"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async_executors = { git = "https://github.com/najamelan/async_executors", branch = "dev" }
