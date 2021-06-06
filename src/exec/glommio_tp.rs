@@ -1,14 +1,8 @@
-use crate::{CoreAffinityGuard, Glommio};
-use crate::{
-    JoinHandle, LocalSpawn, LocalSpawnHandle, LocalSpawnHandleStatic, LocalSpawnStatic, Spawn,
-    SpawnError, SpawnHandle,
-};
-use core::iter;
 use crossbeam::deque::Injector;
 use crossbeam::deque::Stealer;
 use crossbeam::deque::Worker;
 use futures_executor::block_on;
-use futures_task::{FutureObj, LocalFutureObj};
+use futures_task::{FutureObj, LocalFutureObj, Spawn, SpawnError, LocalSpawn};
 use futures_util::future::RemoteHandle;
 use futures_util::FutureExt;
 use glommio_crate::LocalExecutorBuilder;
@@ -17,6 +11,7 @@ use std::fmt::{Display, Formatter};
 use std::future::Future;
 use std::ops::Range;
 use std::sync::{Arc, Mutex};
+use async_executors::{SpawnHandle, JoinHandle, LocalSpawnHandle};
 
 /// A simple glommio runtime builder
 #[derive(Debug)]
@@ -74,9 +69,7 @@ impl GlommioTpBuilder {
             let join_handle = std::thread::Builder::new()
                 .name(name)
                 .spawn(move || {
-                    let guard = CoreAffinityGuard::new().unwrap();
                     t.make().unwrap().run(async move { e.run().await });
-                    drop(guard);
                 })
                 .unwrap();
             join_handles.push(join_handle);
@@ -124,7 +117,7 @@ impl ManagedExecutor {
                     // Pop a task from the local queue, if not empty.
                     let result = self.local.pop().or_else(|| {
                         // Otherwise, we need to look for a task elsewhere.
-                        iter::repeat_with(|| {
+                        std::iter::repeat_with(|| {
                             // Try stealing a batch of tasks from the global queue.
                             self.global
                                 .steal_batch_and_pop(&self.local)
@@ -281,13 +274,15 @@ impl<Out: Send + 'static> SpawnHandle<Out> for GlommioTp {
             future: FutureObj::new(remote.boxed()),
             executor_id: None,
         });
-        Ok(handle.into())
+        Ok(JoinHandle::remote_handle(handle))
     }
 }
 
 impl LocalSpawn for GlommioTp {
     fn spawn_local_obj(&self, future: LocalFutureObj<'static, ()>) -> Result<(), SpawnError> {
-        Glommio::spawn_local(future)
+        glommio_crate::Task::local(future).detach();
+        Ok(())
+
     }
 }
 
@@ -296,6 +291,8 @@ impl<Out: Send + 'static> LocalSpawnHandle<Out> for GlommioTp {
         &self,
         future: LocalFutureObj<'static, Out>,
     ) -> Result<JoinHandle<Out>, SpawnError> {
-        Glommio::spawn_handle_local(future)
+        let (remote, handle) = future.remote_handle();
+        glommio_crate::Task::local(remote).detach();
+        Ok(JoinHandle::remote_handle(handle))
     }
 }
