@@ -1,12 +1,15 @@
+use crate::{
+    JoinHandle, LocalSpawnHandleStatic, LocalSpawnStatic, SpawnBlockingStatic, SpawnHandleStatic,
+    SpawnStatic, YieldNow,
+};
+use futures_task::SpawnError;
 use futures_util::FutureExt;
 use glommio_crate::Task;
 use nix::sched::CpuSet;
 use std::future::Future;
-use futures_task::SpawnError;
-use crate::{LocalSpawnHandleStatic, JoinHandle, SpawnHandleStatic, SpawnBlockingStatic, LocalSpawnStatic, SpawnStatic};
 
 /// A simple glommio runtime builder
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Glommio;
 
 impl LocalSpawnStatic for Glommio {
@@ -67,7 +70,7 @@ impl SpawnBlockingStatic for Glommio {
         Ok(JoinHandle::remote_handle(handle))
     }
 }
-
+impl YieldNow for Glommio {}
 macro_rules! to_io_error {
     ($error:expr) => {{
         match $error {

@@ -1,8 +1,10 @@
+use crate::YieldNow;
+use async_executors::{JoinHandle, LocalSpawnHandle, SpawnHandle};
 use crossbeam::deque::Injector;
 use crossbeam::deque::Stealer;
 use crossbeam::deque::Worker;
 use futures_executor::block_on;
-use futures_task::{FutureObj, LocalFutureObj, Spawn, SpawnError, LocalSpawn};
+use futures_task::{FutureObj, LocalFutureObj, LocalSpawn, Spawn, SpawnError};
 use futures_util::future::RemoteHandle;
 use futures_util::FutureExt;
 use glommio_crate::LocalExecutorBuilder;
@@ -11,7 +13,6 @@ use std::fmt::{Display, Formatter};
 use std::future::Future;
 use std::ops::Range;
 use std::sync::{Arc, Mutex};
-use async_executors::{SpawnHandle, JoinHandle, LocalSpawnHandle};
 
 /// A simple glommio runtime builder
 #[derive(Debug)]
@@ -282,7 +283,6 @@ impl LocalSpawn for GlommioTp {
     fn spawn_local_obj(&self, future: LocalFutureObj<'static, ()>) -> Result<(), SpawnError> {
         glommio_crate::Task::local(future).detach();
         Ok(())
-
     }
 }
 
@@ -296,3 +296,4 @@ impl<Out: Send + 'static> LocalSpawnHandle<Out> for GlommioTp {
         Ok(JoinHandle::remote_handle(handle))
     }
 }
+impl YieldNow for GlommioTp {}
