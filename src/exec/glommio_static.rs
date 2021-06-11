@@ -88,11 +88,11 @@ macro_rules! to_io_error {
         }
     }};
 }
-fn bind_to_cpu_set(cpuset: CpuSet) -> std::io::Result<()> {
+pub fn bind_to_cpu_set(cpuset: CpuSet) -> std::io::Result<()> {
     let pid = nix::unistd::Pid::this();
     to_io_error!(nix::sched::sched_setaffinity(pid, &cpuset))
 }
-fn to_cpu_set(cores: impl Iterator<Item = i32>) -> CpuSet {
+pub fn to_cpu_set(cores: impl Iterator<Item = i32>) -> CpuSet {
     let mut set = CpuSet::new();
     let mut is_set = false;
     for i in cores {
