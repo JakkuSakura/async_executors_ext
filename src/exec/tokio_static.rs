@@ -1,8 +1,11 @@
-use std::future::Future;
-use crate::{SpawnStatic, LocalSpawnStatic, SpawnHandleStatic, JoinHandle, LocalSpawnHandleStatic, SpawnBlockingStatic};
+use crate::{
+    JoinHandle, LocalSpawnHandleStatic, LocalSpawnStatic, SpawnBlockingStatic, SpawnHandleStatic,
+    SpawnStatic, YieldNow,
+};
 use futures_task::SpawnError;
+use std::future::Future;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct Tokio;
 
 impl SpawnStatic for Tokio {
@@ -55,3 +58,4 @@ impl SpawnBlockingStatic for Tokio {
         Ok(JoinHandle::tokio(handle))
     }
 }
+impl YieldNow for Tokio {}
