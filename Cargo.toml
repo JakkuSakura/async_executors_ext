@@ -6,7 +6,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async_executors = { git = "https://github.com/najamelan/async_executors", rev = "84e47cd8cf2923fc5ae59938d9d30ed77d51f36b", features = ["timer"] }
+async_executors = { git = "https://github.com/najamelan/async_executors", rev = "cff5259204f3542f4709cc7c9f2cbadf955a3611", features = ["timer"] }
 futures-util = "*"
 futures-task = "*"
 futures-executor = "*"
