@@ -15,6 +15,8 @@ crossbeam = "*"
 blocking = "*"
 nix = "*"
 tokio_crate = { version = "*", optional = true, package = "tokio" }
+minimal-executor = "0.1.2"
+
 [features]
 default = []
 glommio = ["glommio_crate", "async_executors/glommio"]
