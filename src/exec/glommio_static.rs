@@ -1,11 +1,10 @@
 use crate::{
-    JoinHandle, LocalSpawnHandleStatic, LocalSpawnStatic, SpawnBlockingStatic, SpawnHandleStatic,
-    SpawnStatic, YieldNow,
+    bind_to_cpu_set, to_cpu_set, JoinHandle, LocalSpawnHandleStatic, LocalSpawnStatic,
+    SpawnBlockingStatic, SpawnHandleStatic, SpawnStatic, YieldNow,
 };
 use futures_task::SpawnError;
 use futures_util::FutureExt;
 use glommio_crate::Task;
-use nix::sched::CpuSet;
 use std::future::Future;
 
 /// A simple glommio runtime builder
@@ -71,38 +70,3 @@ impl SpawnBlockingStatic for Glommio {
     }
 }
 impl YieldNow for Glommio {}
-macro_rules! to_io_error {
-    ($error:expr) => {{
-        match $error {
-            Ok(x) => Ok(x),
-            Err(nix::Error::Sys(_)) => Err(std::io::Error::last_os_error()),
-            Err(nix::Error::InvalidUtf8) => {
-                Err(std::io::Error::from(std::io::ErrorKind::InvalidInput))
-            }
-            Err(nix::Error::InvalidPath) => {
-                Err(std::io::Error::from(std::io::ErrorKind::InvalidInput))
-            }
-            Err(nix::Error::UnsupportedOperation) => {
-                Err(std::io::Error::from(std::io::ErrorKind::Other))
-            }
-        }
-    }};
-}
-pub fn bind_to_cpu_set(cpuset: CpuSet) -> std::io::Result<()> {
-    let pid = nix::unistd::Pid::this();
-    to_io_error!(nix::sched::sched_setaffinity(pid, &cpuset))
-}
-pub fn to_cpu_set(cores: impl Iterator<Item = i32>) -> CpuSet {
-    let mut set = CpuSet::new();
-    let mut is_set = false;
-    for i in cores {
-        set.set(i as _).unwrap();
-        is_set = true;
-    }
-    if !is_set {
-        for i in 0..CpuSet::count() {
-            set.set(i as _).unwrap();
-        }
-    }
-    set
-}
