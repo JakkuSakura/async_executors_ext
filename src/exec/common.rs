@@ -1,6 +1,7 @@
 use crate::{JoinHandle, SpawnBlockingStatic, YieldNow};
 use futures_task::SpawnError;
 use futures_util::FutureExt;
+#[cfg(target_os = "linux")]
 use nix::sched::CpuSet;
 
 /// A simple glommio runtime builder
@@ -37,10 +38,13 @@ macro_rules! to_io_error {
         }
     }};
 }
+#[cfg(any(target_os = "android", target_os = "linux"))]
 pub fn bind_to_cpu_set(cpuset: CpuSet) -> std::io::Result<()> {
     let pid = nix::unistd::Pid::this();
     to_io_error!(nix::sched::sched_setaffinity(pid, &cpuset))
 }
+
+#[cfg(any(target_os = "android", target_os = "linux"))]
 pub fn to_cpu_set(cores: impl Iterator<Item = i32>) -> CpuSet {
     let mut set = CpuSet::new();
     let mut is_set = false;
@@ -54,4 +58,10 @@ pub fn to_cpu_set(cores: impl Iterator<Item = i32>) -> CpuSet {
         }
     }
     set
+}
+#[cfg(not(any(target_os = "android", target_os = "linux")))]
+pub fn to_cpu_set(cores: impl Iterator<Item = i32>) {}
+#[cfg(not(any(target_os = "android", target_os = "linux")))]
+pub fn bind_to_cpu_set<T>(x: T) -> std::io::Result<()> {
+    Ok(())
 }
