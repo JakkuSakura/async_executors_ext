@@ -21,6 +21,7 @@ impl SpawnBlockingStatic for CommonRt {
     }
 }
 impl YieldNow for CommonRt {}
+#[allow(unused_macros)]
 macro_rules! to_io_error {
     ($error:expr) => {{
         match $error {
@@ -45,7 +46,7 @@ pub fn bind_to_cpu_set(cpuset: CpuSet) -> std::io::Result<()> {
 }
 
 #[cfg(any(target_os = "android", target_os = "linux"))]
-pub fn to_cpu_set(cores: impl Iterator<Item = i32>) -> CpuSet {
+pub fn to_cpu_set(cores: impl IntoIterator<Item = i32>) -> CpuSet {
     let mut set = CpuSet::new();
     let mut is_set = false;
     for i in cores {
@@ -60,8 +61,8 @@ pub fn to_cpu_set(cores: impl Iterator<Item = i32>) -> CpuSet {
     set
 }
 #[cfg(not(any(target_os = "android", target_os = "linux")))]
-pub fn to_cpu_set(cores: impl Iterator<Item = i32>) {}
+pub fn to_cpu_set(_: impl IntoIterator<Item = i32>) {}
 #[cfg(not(any(target_os = "android", target_os = "linux")))]
-pub fn bind_to_cpu_set<T>(x: T) -> std::io::Result<()> {
+pub fn bind_to_cpu_set<T>(_: T) -> std::io::Result<()> {
     Ok(())
 }
