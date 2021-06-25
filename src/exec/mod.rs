@@ -5,6 +5,7 @@ mod glommio_ct;
 mod glommio_static;
 #[cfg(feature = "glommio")]
 mod glommio_tp;
+mod nonblocking_tp;
 #[cfg(feature = "tokio")]
 mod tokio_static;
 
@@ -15,5 +16,6 @@ pub use glommio_ct::*;
 pub use glommio_static::*;
 #[cfg(feature = "glommio")]
 pub use glommio_tp::*;
+pub use nonblocking_tp::*;
 #[cfg(feature = "tokio")]
 pub use tokio_static::*;

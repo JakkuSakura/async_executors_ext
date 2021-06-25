@@ -7,7 +7,22 @@ use nix::sched::CpuSet;
 /// A simple glommio runtime builder
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CommonRt;
-
+impl CommonRt {
+    pub fn spawn_blocking_with_name<T: Send + 'static>(
+        name: impl Into<String>,
+        func: impl FnOnce() -> T + Send + 'static,
+    ) -> Result<JoinHandle<T>, SpawnError> {
+        let (remote, handle) = async { func() }.remote_handle();
+        std::thread::Builder::new()
+            .name(name.into())
+            .spawn(move || {
+                bind_to_cpu_set(to_cpu_set(None.into_iter())).unwrap();
+                minimal_executor::block_on(remote)
+            })
+            .unwrap();
+        Ok(JoinHandle::remote_handle(handle))
+    }
+}
 impl SpawnBlockingStatic for CommonRt {
     fn spawn_blocking<T: Send + 'static>(
         func: impl FnOnce() -> T + Send + 'static,

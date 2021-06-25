@@ -64,7 +64,7 @@ impl SpawnBlockingStatic for Glommio {
         let (remote, handle) = async { func() }.remote_handle();
         std::thread::spawn(move || {
             bind_to_cpu_set(to_cpu_set(None.into_iter())).unwrap();
-            futures_executor::block_on(remote)
+            minimal_executor::block_on(remote)
         });
         Ok(JoinHandle::remote_handle(handle))
     }

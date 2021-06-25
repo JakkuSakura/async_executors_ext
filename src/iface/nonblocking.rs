@@ -1,10 +1,11 @@
+use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
 use std::task::Poll;
-
 pub trait NonblockingFuture {
     type Output;
     fn poll_nb(self: Pin<&mut Self>) -> Poll<Self::Output>;
 }
+
 pub trait NonblockingFutureExt: NonblockingFuture {
     fn poll_nb_unpin(&mut self) -> Poll<Self::Output>
     where
@@ -14,6 +15,26 @@ pub trait NonblockingFutureExt: NonblockingFuture {
     }
 }
 impl<T: NonblockingFuture> NonblockingFutureExt for T {}
+
+impl<F: ?Sized + NonblockingFuture + Unpin> NonblockingFuture for &mut F {
+    type Output = F::Output;
+
+    fn poll_nb(mut self: Pin<&mut Self>) -> Poll<Self::Output> {
+        F::poll_nb(Pin::new(&mut **self))
+    }
+}
+
+impl<P> NonblockingFuture for Pin<P>
+where
+    P: Unpin + DerefMut,
+    P::Target: NonblockingFuture,
+{
+    type Output = <<P as Deref>::Target as NonblockingFuture>::Output;
+
+    fn poll_nb(self: Pin<&mut Self>) -> Poll<Self::Output> {
+        Pin::get_mut(self).as_mut().poll_nb()
+    }
+}
 
 #[macro_export]
 macro_rules! nb_impl_future {
