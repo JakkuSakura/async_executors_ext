@@ -30,15 +30,16 @@ impl NonblockingTpBuilder {
         let mut controllers = vec![];
         for (id, cpu_id) in range.enumerate() {
             let (tx, rx) = crossbeam::channel::unbounded();
+            let running = Arc::new(AtomicBool::new(true));
             controllers.push(ManagedExecutorController {
-                running: Arc::new(Default::default()),
+                running: Arc::clone(&running),
                 tx,
             });
             let mut executor: ManagedExecutor<()> = ManagedExecutor {
                 cpu: Some(cpu_id),
                 tasks: vec![],
                 rx,
-                running: Arc::new(AtomicBool::new(true)),
+                running,
                 cnt: 0,
             };
             CommonRt::spawn_blocking_with_name(format!("{}-{}", self.name, id), move || {
@@ -64,6 +65,16 @@ impl NonblockingTpBuilder {
 /// A custom task
 pub struct NonblockingTask<T> {
     future: Pin<Box<dyn NonblockingFuture<Output = T> + Send>>,
+}
+impl<T> NonblockingTask<T> {
+    pub fn new(x: impl NonblockingFuture<Output = T> + Send + 'static) -> Self {
+        Self {
+            future: Box::pin(x),
+        }
+    }
+    pub fn new_boxed(x: Pin<Box<dyn NonblockingFuture<Output = T> + Send>>) -> Self {
+        Self { future: x }
+    }
 }
 impl<T> NonblockingFuture for NonblockingTask<T> {
     type Output = T;
