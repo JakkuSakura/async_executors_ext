@@ -23,6 +23,10 @@ impl NonblockingTpBuilder {
             pin_to_cpu: None,
         }
     }
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = name.into();
+        self
+    }
 
     /// block on the given future
     pub fn build(&self) -> Result<NonblockingTp, std::io::Error> {
