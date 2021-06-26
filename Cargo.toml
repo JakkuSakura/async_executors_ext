@@ -16,6 +16,7 @@ blocking = "*"
 nix = "*"
 tokio_crate = { version = "*", optional = true, package = "tokio" }
 minimal-executor = "0.1.2"
+arr_macro = "*"
 
 [features]
 default = []

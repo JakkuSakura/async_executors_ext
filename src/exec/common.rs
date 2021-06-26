@@ -3,6 +3,8 @@ use futures_task::SpawnError;
 use futures_util::FutureExt;
 #[cfg(target_os = "linux")]
 use nix::sched::CpuSet;
+use std::io::ErrorKind;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// A simple glommio runtime builder
 #[derive(Debug, Clone, Copy, Default)]
@@ -54,14 +56,43 @@ macro_rules! to_io_error {
         }
     }};
 }
+
+static ALLOCATED: [AtomicBool; 256] = arr_macro::arr![AtomicBool::new(false); 256];
+pub fn try_bind_to_cpu(core_id: i32) -> std::io::Result<()> {
+    if ALLOCATED[core_id as usize]
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
+        .is_ok()
+    {
+        bind_to_cpu_set(to_cpu_set(Some(core_id)))
+    } else {
+        Err(std::io::Error::new(
+            ErrorKind::Other,
+            format!("Cannot bind to core {}", core_id),
+        ))
+    }
+}
+pub fn try_bind_available_cpu() -> std::io::Result<()> {
+    for i in 0..256 {
+        if try_bind_to_cpu(i).is_ok() {
+            return Ok(());
+        }
+    }
+    Err(std::io::Error::new(
+        ErrorKind::Other,
+        format!("Cannot bind to core 0..256"),
+    ))
+}
+pub fn try_unbind_from_cpu() -> std::io::Result<()> {
+    bind_to_cpu_set(to_cpu_set(None))
+}
 #[cfg(any(target_os = "android", target_os = "linux"))]
-pub fn bind_to_cpu_set(cpuset: CpuSet) -> std::io::Result<()> {
+pub(crate) fn bind_to_cpu_set(cpuset: CpuSet) -> std::io::Result<()> {
     let pid = nix::unistd::Pid::this();
     to_io_error!(nix::sched::sched_setaffinity(pid, &cpuset))
 }
 
 #[cfg(any(target_os = "android", target_os = "linux"))]
-pub fn to_cpu_set(cores: impl IntoIterator<Item = i32>) -> CpuSet {
+pub(crate) fn to_cpu_set(cores: impl IntoIterator<Item = i32>) -> CpuSet {
     let mut set = CpuSet::new();
     let mut is_set = false;
     for i in cores {
@@ -76,8 +107,8 @@ pub fn to_cpu_set(cores: impl IntoIterator<Item = i32>) -> CpuSet {
     set
 }
 #[cfg(not(any(target_os = "android", target_os = "linux")))]
-pub fn to_cpu_set(_: impl IntoIterator<Item = i32>) {}
+pub(crate) fn to_cpu_set(_: impl IntoIterator<Item = i32>) {}
 #[cfg(not(any(target_os = "android", target_os = "linux")))]
-pub fn bind_to_cpu_set<T>(_: T) -> std::io::Result<()> {
+pub(crate) fn bind_to_cpu_set<T>(_: T) -> std::io::Result<()> {
     Ok(())
 }

@@ -1,7 +1,8 @@
-use crate::{bind_to_cpu_set, to_cpu_set, CommonRt, NonblockingFuture, NonblockingFutureExt};
+use crate::{
+    try_bind_available_cpu, try_unbind_from_cpu, CommonRt, NonblockingFuture, NonblockingFutureExt,
+};
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
-use std::ops::Range;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -11,7 +12,6 @@ use std::task::Poll;
 pub struct NonblockingTpBuilder {
     threads: i32,
     name: String,
-    pin_to_cpu: Option<Range<i32>>,
 }
 
 impl NonblockingTpBuilder {
@@ -20,7 +20,6 @@ impl NonblockingTpBuilder {
         Self {
             threads,
             name: "NonblockingTp".to_string(),
-            pin_to_cpu: None,
         }
     }
     pub fn name(mut self, name: impl Into<String>) -> Self {
@@ -30,9 +29,8 @@ impl NonblockingTpBuilder {
 
     /// block on the given future
     pub fn build(&self) -> Result<NonblockingTp, std::io::Error> {
-        let range = self.pin_to_cpu.clone().unwrap_or(0..self.threads);
         let mut controllers = vec![];
-        for (id, cpu_id) in range.enumerate() {
+        for id in 0..self.threads {
             let (tx, rx) = crossbeam::channel::unbounded();
             let running = Arc::new(AtomicBool::new(true));
             controllers.push(ManagedExecutorController {
@@ -40,14 +38,18 @@ impl NonblockingTpBuilder {
                 tx,
             });
             let mut executor: ManagedExecutor<()> = ManagedExecutor {
-                cpu: Some(cpu_id),
+                bind_cpu: true,
                 tasks: vec![],
                 rx,
                 running,
                 cnt: 0,
             };
             CommonRt::spawn_blocking_with_name(format!("{}-{}", self.name, id), move || {
-                bind_to_cpu_set(to_cpu_set(executor.cpu)).unwrap();
+                if executor.bind_cpu {
+                    try_bind_available_cpu().unwrap();
+                } else {
+                    try_unbind_from_cpu().unwrap();
+                }
                 loop {
                     match executor.poll_nb_unpin() {
                         Poll::Ready(_) => break,
@@ -89,7 +91,7 @@ impl<T> NonblockingFuture for NonblockingTask<T> {
 }
 
 struct ManagedExecutor<T> {
-    cpu: Option<i32>,
+    bind_cpu: bool,
     tasks: Vec<NonblockingTask<T>>,
     rx: crossbeam::channel::Receiver<NonblockingTask<T>>,
     running: Arc<AtomicBool>,
