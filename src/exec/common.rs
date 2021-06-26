@@ -6,7 +6,6 @@ use nix::sched::CpuSet;
 use std::io::ErrorKind;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// A simple glommio runtime builder
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CommonRt;
 impl CommonRt {
@@ -18,7 +17,7 @@ impl CommonRt {
         std::thread::Builder::new()
             .name(name.into())
             .spawn(move || {
-                bind_to_cpu_set(to_cpu_set(None.into_iter())).unwrap();
+                try_unbind_from_cpu().unwrap();
                 minimal_executor::block_on(remote)
             })
             .unwrap();
@@ -31,7 +30,7 @@ impl SpawnBlockingStatic for CommonRt {
     ) -> Result<JoinHandle<T>, SpawnError> {
         let (remote, handle) = async { func() }.remote_handle();
         std::thread::spawn(move || {
-            bind_to_cpu_set(to_cpu_set(None.into_iter())).unwrap();
+            try_unbind_from_cpu().unwrap();
             minimal_executor::block_on(remote)
         });
         Ok(JoinHandle::remote_handle(handle))
