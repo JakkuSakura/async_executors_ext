@@ -187,6 +187,16 @@ impl<T> NonblockingFuture for ManagedExecutor<T> {
                 }
                 self.tasks[task_id] = Some(task)
             }
+            for task in self.tasks.iter_mut() {
+                if let Some(task2) = task.as_mut() {
+                    match task2.poll_nb_unpin() {
+                        Poll::Ready(_) => {
+                            *task = None;
+                        }
+                        Poll::Pending => {}
+                    }
+                }
+            }
         }
         let mut tasks = Vec::new();
         for task_ids in self.woken.iter() {
@@ -204,16 +214,7 @@ impl<T> NonblockingFuture for ManagedExecutor<T> {
                 }
             }
         }
-        for task in self.tasks.iter_mut() {
-            if let Some(task2) = task.as_mut() {
-                match task2.poll_nb_unpin() {
-                    Poll::Ready(_) => {
-                        *task = None;
-                    }
-                    Poll::Pending => {}
-                }
-            }
-        }
+
         Poll::Pending
     }
 }
