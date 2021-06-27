@@ -48,7 +48,7 @@ impl NonblockingTpBuilder {
                 if executor.bind_cpu {
                     try_bind_available_cpu().unwrap();
                 } else {
-                    try_unbind_from_cpu().unwrap();
+                    let _ = try_unbind_from_cpu();
                 }
                 loop {
                     match executor.poll_nb_unpin() {

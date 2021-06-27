@@ -17,7 +17,7 @@ impl CommonRt {
         std::thread::Builder::new()
             .name(name.into())
             .spawn(move || {
-                try_unbind_from_cpu().unwrap();
+                let _ = try_unbind_from_cpu();
                 minimal_executor::block_on(remote)
             })
             .unwrap();
@@ -30,7 +30,7 @@ impl SpawnBlockingStatic for CommonRt {
     ) -> Result<JoinHandle<T>, SpawnError> {
         let (remote, handle) = async { func() }.remote_handle();
         std::thread::spawn(move || {
-            try_unbind_from_cpu().unwrap();
+            let _ = try_unbind_from_cpu();
             minimal_executor::block_on(remote)
         });
         Ok(JoinHandle::remote_handle(handle))
