@@ -1,3 +1,4 @@
+mod bitset;
 mod common;
 #[cfg(feature = "glommio")]
 mod glommio_ct;
