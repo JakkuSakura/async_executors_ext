@@ -187,45 +187,45 @@ impl<T> NonblockingFuture for ManagedExecutor<T> {
                 }
                 self.tasks[task_id] = Some(task)
             }
-            for task in self.tasks.iter_mut() {
-                if let Some(task2) = task.as_mut() {
-                    match task2.poll_nb_unpin() {
-                        Poll::Ready(_) => {
-                            *task = None;
-                        }
-                        Poll::Pending => {}
+        }
+        for task in self.tasks.iter_mut() {
+            if let Some(task2) = task.as_mut() {
+                match task2.poll_nb_unpin() {
+                    Poll::Ready(_) => {
+                        *task = None;
                     }
+                    Poll::Pending => {}
                 }
             }
         }
-        if self.woken.get_count() * 2 > self.tasks.len() {
-            for task_id in 0..self.tasks.len() {
-                self.woken.unset(task_id as _);
-                let task = &mut self.tasks[task_id];
-                if let Some(task2) = task.as_mut() {
-                    match task2.poll_nb_unpin() {
-                        Poll::Ready(_) => {
-                            *task = None;
-                        }
-                        Poll::Pending => {}
-                    }
-                }
-            }
-        } else {
-            for task_id in 0..self.tasks.len() {
-                if self.woken.unset(task_id as _) {
-                    let task = &mut self.tasks[task_id];
-                    if let Some(task2) = task.as_mut() {
-                        match task2.poll_nb_unpin() {
-                            Poll::Ready(_) => {
-                                *task = None;
-                            }
-                            Poll::Pending => {}
-                        }
-                    }
-                }
-            }
-        }
+        // if self.woken.get_count() * 2 > self.tasks.len() {
+        //     for task_id in 0..self.tasks.len() {
+        //         self.woken.unset(task_id as _);
+        //         let task = &mut self.tasks[task_id];
+        //         if let Some(task2) = task.as_mut() {
+        //             match task2.poll_nb_unpin() {
+        //                 Poll::Ready(_) => {
+        //                     *task = None;
+        //                 }
+        //                 Poll::Pending => {}
+        //             }
+        //         }
+        //     }
+        // } else {
+        //     for task_id in 0..self.tasks.len() {
+        //         if self.woken.unset(task_id as _) {
+        //             let task = &mut self.tasks[task_id];
+        //             if let Some(task2) = task.as_mut() {
+        //                 match task2.poll_nb_unpin() {
+        //                     Poll::Ready(_) => {
+        //                         *task = None;
+        //                     }
+        //                     Poll::Pending => {}
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
 
         Poll::Pending
     }
