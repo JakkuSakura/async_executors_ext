@@ -1,5 +1,5 @@
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-const SIZE: usize = 128;
+const SIZE: usize = 2048;
 pub struct Bitset {
     dense: [AtomicBool; SIZE],
     count: AtomicUsize,
@@ -8,11 +8,12 @@ pub struct Bitset {
 impl Bitset {
     pub const fn new() -> Self {
         Self {
-            dense: arr_macro::arr![AtomicBool::new(false); 128],
+            dense: arr_macro::arr![AtomicBool::new(false); 2048],
             count: AtomicUsize::new(0),
         }
     }
     pub fn set(&self, i: u32) {
+        assert!(i <= SIZE as _);
         if self.dense[i as usize]
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
             .is_ok()
