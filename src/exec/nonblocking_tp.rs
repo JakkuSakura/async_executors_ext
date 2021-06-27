@@ -1,12 +1,14 @@
 use crate::{
     try_bind_available_cpu, try_unbind_from_cpu, CommonRt, NonblockingFuture, NonblockingFutureExt,
 };
+use dashmap::DashMap;
+use futures_task::ArcWake;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::Arc;
-use std::task::Poll;
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
+use std::sync::{Arc, RwLock};
+use std::task::{Poll, Waker};
 
 #[derive(Debug)]
 pub struct NonblockingTpBuilder {
@@ -42,6 +44,7 @@ impl NonblockingTpBuilder {
                 tasks: vec![],
                 rx,
                 running,
+                woken: Arc::new(DashMap::new()),
                 cnt: 0,
             };
             CommonRt::spawn_blocking_with_name(format!("{}-{}", self.name, id), move || {
@@ -67,19 +70,56 @@ impl NonblockingTpBuilder {
         })
     }
 }
-
+pub struct TaskSetWaker {
+    task_id: AtomicI32,
+    queue_set: RwLock<Option<Arc<DashMap<i32, ()>>>>,
+}
+impl TaskSetWaker {
+    pub fn new() -> Self {
+        Self {
+            task_id: Default::default(),
+            queue_set: RwLock::new(None),
+        }
+    }
+    pub fn wake(&self) {
+        if let Some(set) = self.queue_set.read().unwrap().as_ref() {
+            set.insert(self.task_id.load(Ordering::Relaxed), ());
+        }
+    }
+}
+impl ArcWake for TaskSetWaker {
+    fn wake_by_ref(arc_self: &Arc<Self>) {
+        (**arc_self).wake()
+    }
+}
 /// A custom task
 pub struct NonblockingTask<T> {
     future: Pin<Box<dyn NonblockingFuture<Output = T> + Send>>,
+    waker: Option<Arc<TaskSetWaker>>,
 }
 impl<T> NonblockingTask<T> {
     pub fn new(x: impl NonblockingFuture<Output = T> + Send + 'static) -> Self {
         Self {
             future: Box::pin(x),
+            waker: None,
         }
     }
     pub fn new_boxed(x: Pin<Box<dyn NonblockingFuture<Output = T> + Send>>) -> Self {
-        Self { future: x }
+        Self {
+            future: x,
+            waker: None,
+        }
+    }
+    pub fn get_waker(&mut self) -> Waker {
+        match &self.waker {
+            None => {
+                let waker = Arc::new(TaskSetWaker::new());
+                let waker2 = futures_task::waker_ref(&waker).clone();
+                self.waker = Some(waker);
+                waker2
+            }
+            Some(waker) => futures_task::waker_ref(waker).clone(),
+        }
     }
 }
 impl<T> NonblockingFuture for NonblockingTask<T> {
@@ -92,9 +132,10 @@ impl<T> NonblockingFuture for NonblockingTask<T> {
 
 struct ManagedExecutor<T> {
     bind_cpu: bool,
-    tasks: Vec<NonblockingTask<T>>,
+    tasks: Vec<Option<NonblockingTask<T>>>,
     rx: crossbeam::channel::Receiver<NonblockingTask<T>>,
     running: Arc<AtomicBool>,
+    woken: Arc<DashMap<i32, ()>>,
     cnt: usize,
 }
 
@@ -111,6 +152,13 @@ impl<T> ManagedExecutor<T> {
                 return None;
             }
         }
+    }
+    fn find_hole(&self) -> Option<usize> {
+        self.tasks
+            .iter()
+            .enumerate()
+            .find(|x| x.1.is_none())
+            .map(|x| x.0)
     }
 }
 impl<T> Drop for ManagedExecutor<T> {
@@ -129,16 +177,44 @@ impl<T> NonblockingFuture for ManagedExecutor<T> {
         self.cnt = self.cnt.wrapping_add(1);
         if self.cnt == 10 {
             self.cnt = 0;
-            self.find_task().map(|x| self.tasks.push(x));
-        }
-        let mut i = 0;
-        while i < self.tasks.len() {
-            match self.tasks[i].poll_nb_unpin() {
-                Poll::Ready(_) => {
-                    self.tasks.swap_remove(i);
+            if let Some(task) = self.find_task() {
+                let task_id = if let Some(hole) = self.find_hole() {
+                    hole
+                } else {
+                    let len = self.tasks.len();
+                    self.tasks.push(None);
+                    len
+                };
+                if let Some(waker) = task.waker.as_ref() {
+                    waker.task_id.store(task_id as _, Ordering::Release);
+                    *waker.queue_set.write().unwrap() = Some(Arc::clone(&self.woken));
                 }
-                Poll::Pending => {
-                    i += 1;
+                self.tasks[task_id] = Some(task)
+            }
+        }
+        let mut tasks = Vec::new();
+        for task_ids in self.woken.iter() {
+            tasks.push(*task_ids.key());
+        }
+        for task_id in tasks {
+            self.woken.remove(&task_id);
+            let task = &mut self.tasks[task_id as usize];
+            if let Some(task2) = task.as_mut() {
+                match task2.poll_nb_unpin() {
+                    Poll::Ready(_) => {
+                        *task = None;
+                    }
+                    Poll::Pending => {}
+                }
+            }
+        }
+        for task in self.tasks.iter_mut() {
+            if let Some(task2) = task.as_mut() {
+                match task2.poll_nb_unpin() {
+                    Poll::Ready(_) => {
+                        *task = None;
+                    }
+                    Poll::Pending => {}
                 }
             }
         }
