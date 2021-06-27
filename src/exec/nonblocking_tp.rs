@@ -86,6 +86,9 @@ impl TaskSetWaker {
             set.insert(self.task_id.load(Ordering::Relaxed), ());
         }
     }
+    pub fn into_waker(self: Arc<Self>) -> Waker {
+        futures_task::waker(self)
+    }
 }
 impl ArcWake for TaskSetWaker {
     fn wake_by_ref(arc_self: &Arc<Self>) {
@@ -110,16 +113,9 @@ impl<T> NonblockingTask<T> {
             waker: None,
         }
     }
-    pub fn get_waker(&mut self) -> Waker {
-        match &self.waker {
-            None => {
-                let waker = Arc::new(TaskSetWaker::new());
-                let waker2 = futures_task::waker_ref(&waker).clone();
-                self.waker = Some(waker);
-                waker2
-            }
-            Some(waker) => futures_task::waker_ref(waker).clone(),
-        }
+    pub fn set_waker(mut self, waker: Arc<TaskSetWaker>) -> Self {
+        self.waker = Some(waker);
+        self
     }
 }
 impl<T> NonblockingFuture for NonblockingTask<T> {
