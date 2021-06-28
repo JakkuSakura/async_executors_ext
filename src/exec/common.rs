@@ -64,17 +64,16 @@ pub fn try_bind_to_cpu(core_id: i32) -> anyhow::Result<()> {
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
         .is_ok()
     {
+        debug!("{} binds to core {}", nix::unistd::gettid(), core_id);
         match bind_to_cpu_set(to_cpu_set(Some(core_id))) {
-            Ok(_) => {
-                debug!("Bind to core {}", core_id);
-                Ok(())
-            }
+            Ok(_) => Ok(()),
             Err(e) => Err(e).with_context(|| format!("Error while binding to core {}", core_id)),
         }
     } else {
         anyhow::bail!("Cannot bind to core {}", core_id)
     }
 }
+
 pub fn try_bind_available_cpu() -> std::io::Result<()> {
     for i in 0..256 {
         if try_bind_to_cpu(i).is_ok() {
@@ -87,16 +86,19 @@ pub fn try_bind_available_cpu() -> std::io::Result<()> {
     ))
 }
 pub fn try_unbind_from_cpu() -> std::io::Result<()> {
+    info!("{} unbinds from cpu", nix::unistd::gettid());
     bind_to_cpu_set(to_cpu_set(None))
 }
 #[cfg(any(target_os = "android", target_os = "linux"))]
-pub(crate) fn bind_to_cpu_set(cpuset: CpuSet) -> std::io::Result<()> {
-    let pid = nix::unistd::Pid::this();
+fn bind_to_cpu_set(cpuset: CpuSet) -> std::io::Result<()> {
+    let pid = nix::unistd::gettid();
+    // debug!("taskset -pc {} {}", set, pid);
+
     to_io_error!(nix::sched::sched_setaffinity(pid, &cpuset))
 }
 
 #[cfg(any(target_os = "android", target_os = "linux"))]
-pub(crate) fn to_cpu_set(cores: impl IntoIterator<Item = i32>) -> CpuSet {
+fn to_cpu_set(cores: impl IntoIterator<Item = i32>) -> CpuSet {
     let mut set = CpuSet::new();
     let mut is_set = false;
     for i in cores {
@@ -111,8 +113,8 @@ pub(crate) fn to_cpu_set(cores: impl IntoIterator<Item = i32>) -> CpuSet {
     set
 }
 #[cfg(not(any(target_os = "android", target_os = "linux")))]
-pub(crate) fn to_cpu_set(_: impl IntoIterator<Item = i32>) {}
+fn to_cpu_set(_: impl IntoIterator<Item = i32>) {}
 #[cfg(not(any(target_os = "android", target_os = "linux")))]
-pub(crate) fn bind_to_cpu_set<T>(_: T) -> std::io::Result<()> {
+fn bind_to_cpu_set<T>(_: T) -> std::io::Result<()> {
     Ok(())
 }

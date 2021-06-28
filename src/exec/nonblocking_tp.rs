@@ -1,7 +1,5 @@
 use crate::exec::bitset::Bitset;
-use crate::{
-    try_bind_available_cpu, try_unbind_from_cpu, CommonRt, NonblockingFuture, NonblockingFutureExt,
-};
+use crate::{try_bind_available_cpu, CommonRt, NonblockingFuture, NonblockingFutureExt};
 use futures_task::ArcWake;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
@@ -50,8 +48,6 @@ impl NonblockingTpBuilder {
             CommonRt::spawn_blocking_with_name(format!("{}-{}", self.name, id), move || {
                 if executor.bind_cpu {
                     try_bind_available_cpu().unwrap();
-                } else {
-                    let _ = try_unbind_from_cpu();
                 }
                 loop {
                     match executor.poll_nb_unpin() {
