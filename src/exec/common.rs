@@ -1,10 +1,12 @@
 use crate::{JoinHandle, SpawnBlockingStatic, YieldNow};
+use anyhow::Context;
 use futures_task::SpawnError;
 use futures_util::FutureExt;
 #[cfg(target_os = "linux")]
 use nix::sched::CpuSet;
 use std::io::ErrorKind;
 use std::sync::atomic::{AtomicBool, Ordering};
+use tracing::*;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CommonRt;
@@ -57,17 +59,20 @@ macro_rules! to_io_error {
 }
 
 static ALLOCATED: [AtomicBool; 256] = arr_macro::arr![AtomicBool::new(false); 256];
-pub fn try_bind_to_cpu(core_id: i32) -> std::io::Result<()> {
+pub fn try_bind_to_cpu(core_id: i32) -> anyhow::Result<()> {
     if ALLOCATED[core_id as usize]
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
         .is_ok()
     {
-        bind_to_cpu_set(to_cpu_set(Some(core_id)))
+        match bind_to_cpu_set(to_cpu_set(Some(core_id))) {
+            Ok(_) => {
+                debug!("Bind to core {}", core_id);
+                Ok(())
+            }
+            Err(e) => Err(e).with_context(|| format!("Error while binding to core {}", core_id)),
+        }
     } else {
-        Err(std::io::Error::new(
-            ErrorKind::Other,
-            format!("Cannot bind to core {}", core_id),
-        ))
+        anyhow::bail!("Cannot bind to core {}", core_id)
     }
 }
 pub fn try_bind_available_cpu() -> std::io::Result<()> {
