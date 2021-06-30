@@ -6,6 +6,7 @@ use futures_util::FutureExt;
 use nix::sched::CpuSet;
 use std::io::ErrorKind;
 use std::sync::atomic::{AtomicBool, Ordering};
+#[allow(unused_imports)]
 use tracing::*;
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -64,7 +65,7 @@ pub fn try_bind_to_cpu(core_id: i32) -> anyhow::Result<()> {
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
         .is_ok()
     {
-        debug!("{} binds to core {}", nix::unistd::gettid(), core_id);
+        // debug!("{} binds to core {}", nix::unistd::gettid(), core_id);
         match bind_to_cpu_set(to_cpu_set(Some(core_id))) {
             Ok(_) => Ok(()),
             Err(e) => Err(e).with_context(|| format!("Error while binding to core {}", core_id)),
@@ -86,7 +87,7 @@ pub fn try_bind_available_cpu() -> std::io::Result<()> {
     ))
 }
 pub fn try_unbind_from_cpu() -> std::io::Result<()> {
-    info!("{} unbinds from cpu", nix::unistd::gettid());
+    // info!("{} unbinds from cpu", nix::unistd::gettid());
     bind_to_cpu_set(to_cpu_set(None))
 }
 #[cfg(any(target_os = "android", target_os = "linux"))]
