@@ -32,10 +32,13 @@ impl SpawnBlockingStatic for CommonRt {
         func: impl FnOnce() -> T + Send + 'static,
     ) -> Result<JoinHandle<T>, SpawnError> {
         let (remote, handle) = async { func() }.remote_handle();
-        std::thread::spawn(move || {
-            let _ = try_unbind_from_cpu();
-            minimal_executor::block_on(remote)
-        });
+        std::thread::Builder::new()
+            .name("unnamed-thread".into())
+            .spawn(move || {
+                let _ = try_unbind_from_cpu();
+                minimal_executor::block_on(remote)
+            })
+            .unwrap();
         Ok(JoinHandle::remote_handle(handle))
     }
 }
