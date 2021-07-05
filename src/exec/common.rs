@@ -68,13 +68,28 @@ pub fn try_bind_to_cpu(core_id: i32) -> anyhow::Result<()> {
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
         .is_ok()
     {
-        // debug!("{} binds to core {}", nix::unistd::gettid(), core_id);
-        match bind_to_cpu_set(to_cpu_set(Some(core_id))) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e).with_context(|| format!("Error while binding to core {}", core_id)),
-        }
+        force_bind_to_cpu(core_id)
     } else {
-        anyhow::bail!("Cannot bind to core {}", core_id)
+        anyhow::bail!("Core {} occupied", core_id)
+    }
+}
+pub fn allocate_cpu() -> Option<i32> {
+    for i in 0..256 {
+        if ALLOCATED[i as usize]
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
+            .is_ok()
+        {
+            return Some(i);
+        }
+    }
+    None
+}
+pub fn force_bind_to_cpu(core_id: i32) -> anyhow::Result<()> {
+    ALLOCATED[core_id as usize].store(true, Ordering::Release);
+    // debug!("{} binds to core {}", nix::unistd::gettid(), core_id);
+    match bind_to_cpu_set(to_cpu_set(Some(core_id))) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e).with_context(|| format!("Error while binding to core {}", core_id)),
     }
 }
 
