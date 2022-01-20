@@ -48,16 +48,7 @@ macro_rules! to_io_error {
     ($error:expr) => {{
         match $error {
             Ok(x) => Ok(x),
-            Err(nix::Error::Sys(_)) => Err(std::io::Error::last_os_error()),
-            Err(nix::Error::InvalidUtf8) => {
-                Err(std::io::Error::from(std::io::ErrorKind::InvalidInput))
-            }
-            Err(nix::Error::InvalidPath) => {
-                Err(std::io::Error::from(std::io::ErrorKind::InvalidInput))
-            }
-            Err(nix::Error::UnsupportedOperation) => {
-                Err(std::io::Error::from(std::io::ErrorKind::Other))
-            }
+            Err(_) => Err(std::io::Error::last_os_error()),
         }
     }};
 }
